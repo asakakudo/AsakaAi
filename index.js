@@ -19,7 +19,7 @@ const client = new Client({
 });
 
 client.on('qr', qr => {
-    qrcode.generate(qr, { small: true });
+    qrcode.generate(qr, { small: false });
 });
 
 client.on('ready', () => {
@@ -34,3 +34,4 @@ client.on('message', msg => {
 });
 
 client.initialize();
+
