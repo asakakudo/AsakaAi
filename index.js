@@ -3,7 +3,9 @@ const qrcode = require('qrcode-terminal');
 const commands = require('./commands');
 
 const client = new Client({
-    authStrategy: new LocalAuth(),
+    authStrategy: new LocalAuth({
+        dataPath: './.wwebjs_auth' // Memastikan folder ini yang digunakan
+    }),
     puppeteer: {
         headless: true,
         args: [
@@ -41,5 +43,6 @@ client.on('message', msg => {
 });
 
 client.initialize();
+
 
 
