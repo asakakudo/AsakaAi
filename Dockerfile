@@ -1,25 +1,28 @@
 FROM ghcr.io/puppeteer/puppeteer:latest
 
-# Pindah ke user root sementara untuk mengatur folder
 USER root
 
-# Tentukan direktori kerja
+# Instal library tambahan untuk sistem (opsional tapi disarankan)
+RUN apt-get update && apt-get install -y \
+    libnss3 \
+    libatk-bridge2.0-0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libgbm1 \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /usr/src/app
 
-# Copy package files duluan agar build lebih cepat (caching)
-COPY package*.json ./
+# Buat folder auth secara manual dan beri izin ke pptruser
+RUN mkdir -p .wwebjs_auth && chown -R pptruser:pptruser /usr/src/app
 
-# Perbaiki izin akses folder agar bisa ditulis oleh npm
-RUN chown -R pptruser:pptruser /usr/src/app
+COPY --chown=pptruser:pptruser package*.json ./
 
-# Balik ke user pptruser (standar image puppeteer) untuk install & jalankan bot
 USER pptruser
 
-# Install dependencies (sekarang sudah punya izin akses)
 RUN npm install
 
-# Copy sisa file project
 COPY --chown=pptruser:pptruser . .
 
-# Jalankan aplikasi
 CMD ["node", "index.js"]
