@@ -19,7 +19,14 @@ const client = new Client({
 });
 
 client.on('qr', qr => {
-    qrcode.generate(qr, { small: false });
+    // Menampilkan link agar Anda bisa scan via browser
+    console.log('------------------------------------------------');
+    console.log('SCAN QR DI LINK INI:');
+    console.log(`https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qr)}&size=300x300`);
+    console.log('------------------------------------------------');
+    
+    // Tetap tampilkan di terminal sebagai cadangan
+    qrcode.generate(qr, { small: true });
 });
 
 client.on('ready', () => {
@@ -34,4 +41,5 @@ client.on('message', msg => {
 });
 
 client.initialize();
+
 
