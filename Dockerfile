@@ -2,7 +2,7 @@ FROM ghcr.io/puppeteer/puppeteer:latest
 
 USER root
 
-# Instal dependensi sistem dan su-exec untuk manajemen user
+# Instal dependensi sistem dan gosu untuk manajemen user
 RUN apt-get update && apt-get install -y \
     libnss3 \
     libatk-bridge2.0-0 \
@@ -10,12 +10,12 @@ RUN apt-get update && apt-get install -y \
     libxdamage1 \
     libxrandr2 \
     libgbm1 \
-    su-exec \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /usr/src/app
 
-# Copy package files
+# Copy package files sesuai struktur repo Anda
 COPY package*.json ./
 
 # Install dependencies
@@ -27,6 +27,5 @@ COPY . .
 # Pastikan folder auth ada
 RUN mkdir -p .wwebjs_auth
 
-# Gunakan ENTRYPOINT untuk memperbaiki izin Volume setiap kali bot start
-# Kemudian jalankan bot sebagai pptruser menggunakan su-exec
-ENTRYPOINT ["/bin/sh", "-c", "chown -R pptruser:pptruser /usr/src/app && exec su-exec pptruser node index.js"]
+# Gunakan ENTRYPOINT untuk memperbaiki izin Volume dan jalankan sebagai pptruser menggunakan gosu
+ENTRYPOINT ["/bin/sh", "-c", "chown -R pptruser:pptruser /usr/src/app && exec gosu pptruser node index.js"]
