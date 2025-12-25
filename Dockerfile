@@ -2,7 +2,7 @@ FROM ghcr.io/puppeteer/puppeteer:latest
 
 USER root
 
-# Instal library tambahan untuk sistem (opsional tapi disarankan)
+# Instal dependensi sistem yang diperlukan
 RUN apt-get update && apt-get install -y \
     libnss3 \
     libatk-bridge2.0-0 \
@@ -14,15 +14,19 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /usr/src/app
 
-# Buat folder auth secara manual dan beri izin ke pptruser
-RUN mkdir -p .wwebjs_auth && chown -R pptruser:pptruser /usr/src/app
+# Copy package files
+COPY package*.json ./
 
-COPY --chown=pptruser:pptruser package*.json ./
-
-USER pptruser
-
+# Install dependencies
 RUN npm install
 
-COPY --chown=pptruser:pptruser . .
+# Copy sisa kode project
+COPY . .
 
-CMD ["node", "index.js"]
+# --- BAGIAN PENTING UNTUK VOLUME ---
+# Pastikan folder auth ada dan dimiliki oleh pptruser
+RUN mkdir -p .wwebjs_auth && chown -R pptruser:pptruser /usr/src/app
+
+# Jalankan perintah perbaikan izin setiap kali container start
+# Ini memastikan Volume yang di-mount tetap bisa ditulis oleh bot
+ENTRYPOINT ["/bin/sh", "-c", "chown -R pptruser:pptruser /usr/src/app/.wwebjs_auth && exec run-user pptruser node index.js"]
