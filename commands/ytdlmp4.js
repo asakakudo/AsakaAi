@@ -18,10 +18,7 @@ module.exports = {
             if (res.url) {
                 const videoUrl = res.url;
                 const videoTitle = res.title || 'Video YouTube';
-                console.log(`[DEBUG] Mendownload video dari: ${videoUrl}`);
-
-                console.log(`[DEBUG] Mendownload video dari: ${videoUrl}`);
-
+                console.log(`[DEBUG] Mendownload video dari: ${videoUrl}`)
                 const media = await MessageMedia.fromUrl(videoUrl, { unsafeMime: true }).catch(e => {
                     console.error('[DEBUG] Gagal download file media:', e.message);
                     return null;

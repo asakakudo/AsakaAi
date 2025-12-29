@@ -1,75 +1,141 @@
 const axios = require('axios');
+const {
+    processAiImage,
+    getImageFromMessage,
+    AI_IMAGE_FEATURES
+} = require('../commands/ai-image');
 
 let chatHistory = {};
+
+/* =======================
+   CUSTOM MESSAGE MAP
+======================= */
+const AI_MESSAGES = {
+    toanime: () => '🎨 Foto kamu berhasil diubah jadi anime!',
+    tofigure: () => '🤖 Foto ini sekarang jadi figur action!',
+    tohijab: () => '🧕 Foto berhasil dipakaikan hijab.',
+    hitamkan: () => '🖤 FOTO LU BERHASIL DIHITAMKAN🔥🔥.',
+    waifu2x: () => '✨ Resolusi foto berhasil ditingkatkan.',
+    upscaler: () => '🔍 Foto berhasil di-upscale.',
+    removebg: () => '✂️ Background foto berhasil dihapus.',
+    colorize: () => '🌈 Foto hitam-putih berhasil diberi warna.',
+    remini: () => '🪄 Foto berhasil diperjelas.',
+    edit: (prompt) => `🎨 Prompt digunakan:\n"${prompt}"`
+};
 
 module.exports = {
     name: "!ai",
     async execute(msg, chat, args) {
         const chatId = chat.id._serialized;
+
+        /* =======================
+           AI IMAGE MODE
+        ======================= */
+        const feature = args[0];
+        if (feature && AI_IMAGE_FEATURES[feature]) {
+            try {
+                const imageUrl = await getImageFromMessage(msg);
+                if (!imageUrl) {
+                    return msg.reply('Reply atau kirim gambar untuk fitur AI.');
+                }
+
+                const prompt =
+                    feature === 'edit'
+                        ? args.slice(1).join(' ')
+                        : null;
+
+                if (feature === 'edit' && !prompt) {
+                    return msg.reply('Edit image butuh prompt.');
+                }
+
+                await processAiImage({
+                    chat,
+                    feature,
+                    imageUrl,
+                    prompt
+                });
+
+                // kirim pesan khusus
+                const messageBuilder = AI_MESSAGES[feature];
+                if (messageBuilder) {
+                    await msg.reply(messageBuilder(prompt));
+                }
+
+                return;
+            } catch (err) {
+                console.error('[AI IMAGE ERROR]', err.message);
+                return msg.reply('Gagal memproses AI image.');
+            }
+        }
+
+        /* =======================
+           CHAT MODE (GEMINI)
+        ======================= */
         const query = args.join(" ");
-        
-    
-        const hasMedia = msg.hasMedia || (msg.hasQuotedMsg && (await msg.getQuotedMessage()).hasMedia);
+        const hasMedia =
+            msg.hasMedia ||
+            (msg.hasQuotedMsg && (await msg.getQuotedMessage()).hasMedia);
 
         try {
             if (!chatHistory[chatId]) chatHistory[chatId] = [];
 
             let contentParts = [];
 
-            // 1. LOGIKA HANDLE GAMBAR
             if (hasMedia) {
-                console.log(`[DEBUG] Mengunduh media...`);
-                const media = msg.hasMedia 
-                    ? await msg.downloadMedia() 
+                const media = msg.hasMedia
+                    ? await msg.downloadMedia()
                     : await (await msg.getQuotedMessage()).downloadMedia();
 
-                if (media.mimetype.startsWith('image/')) {
-                    contentParts.push({
-                        inlineData: {
-                            mimeType: media.mimetype,
-                            data: media.data // Ini adalah string Base64
-                        }
-                    });
-                } else {
-                    return msg.reply("Maaf, saat ini saya hanya bisa menganalisis gambar.");
+                if (!media.mimetype.startsWith('image/')) {
+                    return msg.reply("Saya hanya bisa menganalisis gambar.");
                 }
+
+                contentParts.push({
+                    inlineData: {
+                        mimeType: media.mimetype,
+                        data: media.data
+                    }
+                });
             }
 
-            // 2. LOGIKA HANDLE TEKS
-            if (!query && !hasMedia) return msg.reply("Mau nanya apa? Kirim gambar dengan caption !ai atau kirim teks aja.");
-            
-            contentParts.push({ text: query || "Jelaskan gambar ini" });
+            if (!query && !hasMedia) {
+                return msg.reply("Kirim teks atau reply gambar dengan !ai");
+            }
 
-            // Masukkan ke history
+            contentParts.push({
+                text: query || "Jelaskan gambar ini"
+            });
+
             chatHistory[chatId].push({
                 role: "user",
                 parts: contentParts
             });
-            
-            if (chatHistory[chatId].length > 5) chatHistory[chatId].shift();
 
-            console.log(`[DEBUG] Menghubungi Gemini 3 Flash (Multimodal)...`);
+            if (chatHistory[chatId].length > 5) {
+                chatHistory[chatId].shift();
+            }
+
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${process.env.GEMINI_KEY}`;
 
             const response = await axios.post(url, {
                 contents: chatHistory[chatId]
             });
 
-            if (response.data.candidates && response.data.candidates[0].content) {
-                const resultText = response.data.candidates[0].content.parts[0].text;
-                
+            const resultText =
+                response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+            if (resultText) {
                 chatHistory[chatId].push({
                     role: "model",
                     parts: [{ text: resultText }]
                 });
-
                 await msg.reply(resultText);
             }
 
         } catch (e) {
-            console.error("=== ERROR API GEMINI ===");
+            console.error("=== ERROR GEMINI ===");
             console.error(e.response ? JSON.stringify(e.response.data) : e.message);
-            msg.reply("Gagal menganalisis. Coba kirim ulang gambarnya.");
+            msg.reply("Gagal memproses permintaan.");
         }
     }
 };

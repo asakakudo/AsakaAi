@@ -60,13 +60,24 @@ Selamat datang di **AsaAi**
 
 🤖 **AI & Chat**
 ├ !ai [tanya] - Tanya apa saja ke AI
-└ !img [prompt] - Buat gambar dari teks (soon🔧)
+├ !toanime - ubah gambar jadi anime
+├ !tofigure - ubah gambar jadi figur
+├ !tohijab - ubah gambar jadi berhijab
+├ !hitamkan - RAMAIKAN LALU HITAMKAN🔥🔥
+├ !waifu2x - ubah foto anime lu jadi hd
+├ !upscaler / !remini - ubah semua foto jadi makin HD
+├ !removebg - hapus background gambar
+└ !edit [prompt] - Edit gambar dengan prompt ai
+
 
 📥 **Downloader**
+├ !dl [link] - Download Media dari berbagai platform
+├ !fb [link] - Download Facebook Video
+├ !tw [link] - Download Twitter Video
 ├ !tt [link] - Download TikTok Video
 ├ !ytmp4 [link] - Download YT Video
 ├ !ytmp3 [link] - Download YT Audio (MP3)
-└ !ig [link] - Download Instagram (soon🔧)
+└ !ig [link] - Download Instagram Video
 
 🎨 **Media & Tools**
 ├ !s - Ubah gambar jadi stiker
