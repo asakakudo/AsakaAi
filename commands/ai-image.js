@@ -1,6 +1,7 @@
 const axios = require('axios');
 const { MessageMedia } = require('whatsapp-web.js');
 const FormData = require('form-data');
+const sharp = require('sharp');
 
 /* =======================
    FEATURE → ENDPOINT MAP
@@ -19,12 +20,17 @@ const AI_IMAGE_FEATURES = {
 };
 
 async function uploadImageBase64(media) {
-    const buffer = Buffer.from(media.data, 'base64');
+    const inputBuffer = Buffer.from(media.data, 'base64');
+
+    // 🔥 NORMALISASI IMAGE
+    const jpegBuffer = await sharp(inputBuffer)
+        .jpeg({ quality: 90 })
+        .toBuffer();
 
     const form = new FormData();
-    form.append('file', buffer, {
+    form.append('file', jpegBuffer, {
         filename: 'image.jpg',
-        contentType: media.mimetype
+        contentType: 'image/jpeg'
     });
 
     const res = await axios.post(
@@ -33,11 +39,6 @@ async function uploadImageBase64(media) {
         { headers: form.getHeaders() }
     );
 
-    if (!Array.isArray(res.data) || !res.data[0]?.src) {
-        throw new Error('Gagal upload ke telegra.ph');
-    }
-
-    // 🔥 DIRECT IMAGE URL (AMAN 100%)
     return `https://telegra.ph${res.data[0].src}`;
 }
 
@@ -49,16 +50,12 @@ async function getImageFromMessage(msg) {
 
     if (msg.hasQuotedMsg) {
         const quoted = await msg.getQuotedMessage();
-        if (quoted.hasMedia) {
-            media = await quoted.downloadMedia();
-        }
+        if (quoted.hasMedia) media = await quoted.downloadMedia();
     } else if (msg.hasMedia) {
         media = await msg.downloadMedia();
     }
 
-    if (!media || !media.mimetype.startsWith('image/')) {
-        return null;
-    }
+    if (!media || !media.mimetype.startsWith('image/')) return null;
 
     return await uploadImageBase64(media);
 }
@@ -66,41 +63,41 @@ async function getImageFromMessage(msg) {
 /* =======================
    CORE IMAGE PROCESSOR
 ======================= */
-async function processAiImage({ chat, feature, imageUrl, prompt = null }) {
+async function processAiImage({ chat, feature, imageUrl }) {
     const endpoint = AI_IMAGE_FEATURES[feature];
     if (!endpoint) throw new Error('Fitur AI image tidak dikenali.');
 
-    // ✅ PARAMETER BENAR: img
-    let apiUrl = `https://api.ryzumi.vip/api/ai/${endpoint}?imageUrl=${encodeURIComponent(imageUrl)}`;
-
-    if (feature === 'edit') {
-        if (!prompt) throw new Error('Prompt diperlukan.');
-        apiUrl += `&prompt=${encodeURIComponent(prompt)}`;
-    }
-
     try {
-        const response = await axios.get(apiUrl);
-        const res = response.data;
+        const response = await axios.get(
+            `https://api.ryzumi.vip/api/ai/${endpoint}`,
+            {
+                params: {
+                    imageUrl // ⬅️ PENTING: pakai params
+                },
+                headers: {
+                    Accept: 'image/png'
+                },
+                responseType: 'arraybuffer',
+                validateStatus: () => true // ⬅️ jangan auto-throw
+            }
+        );
 
-        if (!res.result?.url) {
-            throw new Error('Response AI tidak valid.');
+        if (response.status !== 200) {
+            console.error('[AI IMAGE API ERROR]');
+            console.error('STATUS:', response.status);
+            console.error('DATA:', response.data?.toString());
+            throw new Error('AI image gagal diproses.');
         }
 
-        const media = await MessageMedia.fromUrl(res.result.url);
+        const media = new MessageMedia(
+            'image/png',
+            Buffer.from(response.data).toString('base64')
+        );
+
         await chat.sendMessage(media);
 
-        return {
-            feature,
-            prompt,
-            outputUrl: res.result.url
-        };
-
     } catch (err) {
-        if (err.response) {
-            console.error('[AI IMAGE API ERROR]');
-            console.error('STATUS:', err.response.status);
-            console.error('DATA:', err.response.data);
-        }
+        console.error('[AI IMAGE ERROR]', err.message);
         throw err;
     }
 }
