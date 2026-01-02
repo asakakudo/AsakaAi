@@ -14,7 +14,7 @@ const AI_MESSAGES = {
     toanime: () => '🎨 Foto kamu berhasil diubah jadi anime!',
     tofigure: () => '🤖 Foto ini sekarang jadi figur action!',
     tohijab: () => '🧕 Foto berhasil dipakaikan hijab.',
-    hitamkan: () => '🖤 FOTO LU BERHASIL DIHITAMKAN🔥🔥.',
+    hitamkan: () => '🖤 FOTO LU BERHASIL DIHITAMKAN🔥🔥',
     waifu2x: () => '✨ Resolusi foto berhasil ditingkatkan.',
     upscaler: () => '🔍 Foto berhasil di-upscale.',
     removebg: () => '✂️ Background foto berhasil dihapus.',
@@ -28,9 +28,7 @@ module.exports = {
     async execute(msg, chat, args) {
         const chatId = chat.id._serialized;
 
-        /* =======================
-           AI IMAGE MODE
-        ======================= */
+        // AI IMAGE MODE
         const feature = args[0];
         if (feature && AI_IMAGE_FEATURES[feature]) {
             try {
@@ -55,7 +53,6 @@ module.exports = {
                     prompt
                 });
 
-                // kirim pesan khusus
                 const messageBuilder = AI_MESSAGES[feature];
                 if (messageBuilder) {
                     await msg.reply(messageBuilder(prompt));
@@ -68,9 +65,7 @@ module.exports = {
             }
         }
 
-        /* =======================
-           CHAT MODE (GEMINI)
-        ======================= */
+        // CHAT MODE (GEMINI)
         const query = args.join(" ");
         const hasMedia =
             msg.hasMedia ||

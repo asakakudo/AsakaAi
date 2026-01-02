@@ -94,12 +94,8 @@ module.exports = {
                 }
             }
 
-            /* ===== FETCH ===== */
             res = (await axios.get(apiUrl)).data;
 
-            /* ===== OUTPUT HANDLER ===== */
-
-            // INSTAGRAM & THREADS (multi media)
             if (platform === 'ig' || platform === 'thr') {
                 if (!res.result?.length) return msg.reply('Media tidak ditemukan.');
 
@@ -115,7 +111,6 @@ module.exports = {
                 }
             }
 
-            // FACEBOOK & TWITTER
             if (platform === 'fb' || platform === 'tw') {
                 const videoUrl = res.result?.hd || res.result?.sd;
                 const size = res.result?.filesize;
@@ -131,7 +126,6 @@ module.exports = {
                 await chat.sendMessage(media, { sendMediaAsDocument: true });
             }
 
-            // TIKTOK & BILIBILI
             if (platform === 'tt' || platform === 'bili') {
                 const videoUrl = res.result.video || res.result.url;
                 const size = res.result.filesize;
@@ -147,7 +141,6 @@ module.exports = {
                 await chat.sendMessage(media, { sendMediaAsDocument: true });
             }
 
-            // SPOTIFY & SOUNDCLOUD (audio only)
             if (platform === 'sp' || platform === 'sc') {
                 const size = res.result.filesize;
 
@@ -165,7 +158,6 @@ module.exports = {
                 });
             }
 
-            // MEDIAFIRE, MEGA, GDRIVE (file bebas)
             if (['mf', 'mg', 'dr'].includes(platform)) {
                 const size = res.result.filesize || res.result.size;
 
@@ -183,7 +175,6 @@ module.exports = {
                 });
             }
 
-            // YOUTUBE
             if (platform === 'yt') {
                 const size = res.result.filesize || res.result.size;
 

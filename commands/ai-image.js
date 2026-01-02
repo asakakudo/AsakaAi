@@ -1,11 +1,8 @@
 const axios = require('axios');
 const { MessageMedia } = require('whatsapp-web.js');
 const FormData = require('form-data');
-const sharp = require('sharp');
+const https = require('https');
 
-/* =======================
-   FEATURE → ENDPOINT MAP
-======================= */
 const AI_IMAGE_FEATURES = {
     toanime: 'toanime',
     tofigure: 'tofigure',
@@ -20,31 +17,33 @@ const AI_IMAGE_FEATURES = {
 };
 
 async function uploadImageBase64(media) {
-    const inputBuffer = Buffer.from(media.data, 'base64');
-
-    // 🔥 NORMALISASI IMAGE
-    const jpegBuffer = await sharp(inputBuffer)
-        .jpeg({ quality: 90 })
-        .toBuffer();
-
     const form = new FormData();
-    form.append('file', jpegBuffer, {
-        filename: 'image.jpg',
-        contentType: 'image/jpeg'
+    form.append('reqtype', 'fileupload');
+    form.append('fileToUpload', Buffer.from(media.data, 'base64'), {
+        filename: 'image.png',
+        contentType: 'image/png'
     });
 
-    const res = await axios.post(
-        'https://telegra.ph/upload',
-        form,
-        { headers: form.getHeaders() }
-    );
+    try {
+        const res = await axios.post('https://catbox.moe/user/api.php', form, {
+            headers: {
+                ...form.getHeaders(),
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
+            }
+        });
 
-    return `https://telegra.ph${res.data[0].src}`;
+        if (res.data && res.data.startsWith('http')) {
+            console.log(`[UPLOAD SUCCESS] URL: ${res.data}`);
+            return res.data.trim();
+        } else {
+            throw new Error('Upload ke Catbox gagal.');
+        }
+    } catch (err) {
+        console.error('[UPLOAD ERROR]', err.message);
+        throw new Error('Gagal mengupload gambar sementara.');
+    }
 }
 
-/* =======================
-   GET IMAGE FROM MESSAGE
-======================= */
 async function getImageFromMessage(msg) {
     let media = null;
 
@@ -60,33 +59,36 @@ async function getImageFromMessage(msg) {
     return await uploadImageBase64(media);
 }
 
-/* =======================
-   CORE IMAGE PROCESSOR
-======================= */
 async function processAiImage({ chat, feature, imageUrl }) {
     const endpoint = AI_IMAGE_FEATURES[feature];
     if (!endpoint) throw new Error('Fitur AI image tidak dikenali.');
+
+    console.log(`[AI IMAGE] Processing: ${feature} | Source: ${imageUrl}`);
+
+    const agent = new https.Agent({  
+        keepAlive: true,
+        rejectUnauthorized: false 
+    });
 
     try {
         const response = await axios.get(
             `https://api.ryzumi.vip/api/ai/${endpoint}`,
             {
                 params: {
-                    imageUrl // ⬅️ PENTING: pakai params
+                    imageUrl: imageUrl 
                 },
                 headers: {
-                    Accept: 'image/png'
+                    'Accept': 'image/png',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
                 },
                 responseType: 'arraybuffer',
-                validateStatus: () => true // ⬅️ jangan auto-throw
+                httpsAgent: agent,
+                timeout: 60000
             }
         );
 
         if (response.status !== 200) {
-            console.error('[AI IMAGE API ERROR]');
-            console.error('STATUS:', response.status);
-            console.error('DATA:', response.data?.toString());
-            throw new Error('AI image gagal diproses.');
+            throw new Error(`API Error: ${response.status} - ${response.statusText}`);
         }
 
         const media = new MessageMedia(
@@ -97,8 +99,16 @@ async function processAiImage({ chat, feature, imageUrl }) {
         await chat.sendMessage(media);
 
     } catch (err) {
-        console.error('[AI IMAGE ERROR]', err.message);
-        throw err;
+        if (err.code === 'ECONNRESET') {
+            console.error('[AI IMAGE ERROR] Koneksi diputus oleh server (ECONNRESET).');
+            throw new Error('Koneksi ke server AI terputus. Coba lagi nanti.');
+        } else if (err.response && err.response.status === 400) {
+            console.error('[AI IMAGE ERROR] 400 Bad Request. URL Gambar mungkin ditolak.');
+            throw new Error('Server AI menolak gambar ini. Coba gunakan gambar lain.');
+        } else {
+            console.error('[AI IMAGE ERROR]', err.message);
+            throw err;
+        }
     }
 }
 
