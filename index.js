@@ -9,15 +9,16 @@ const isLinux = process.platform === 'linux';
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
-        headless: isLinux ? true : false, 
+        headless: false, // Paksa FALSE (Muncul Window) di Windows agar download media lancar
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
             '--no-first-run',
             '--no-zygote',
-            '--disable-gpu'
+            '--disable-web-security', // Izinkan download konten cross-origin
+            '--disable-features=IsolateOrigins,site-per-process', // Fix masalah iframe/media
+            '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         ],
         executablePath: isLinux ? '/usr/bin/chromium-browser' : undefined 
     }
@@ -31,11 +32,15 @@ if (!fs.existsSync(commandPath)) fs.mkdirSync(commandPath);
 const commandFiles = fs.readdirSync('./commands').filter(file => file.endsWith('.js'));
 
 for (const file of commandFiles) {
-    const command = require(`./commands/${file}`);
-    
-    if (command.name) {
-        client.commands.set(command.name, command);
-        console.log(`[LOAD] Perintah dimuat: ${command.name}`);
+    try {
+        const command = require(`./commands/${file}`);
+        
+        if (command.name) {
+            client.commands.set(command.name, command);
+            console.log(`[LOAD] Perintah dimuat: ${command.name}`);
+        }
+    } catch (e) {
+        console.warn(`[SKIP] Gagal memuat command ${file}: ${e.message}`);
     }
 }
 

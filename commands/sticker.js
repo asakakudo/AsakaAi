@@ -37,45 +37,140 @@ if (emojiCache.size > MAX_CACHE) emojiCache.clear();
 module.exports = {
     name: '!s',
     async execute(msg, chat, args) {
-        let media = null;
+        console.log('[STICKER] Execute function called!');
+        
+        await chat.sendSeen(); // ✅ Paksa status 'read' agar WA prioritaskan download
+        
+        let mediaMsg = msg;
+        
+        // Cek apakah ada quoted message
+        if (msg.hasQuotedMsg) {
+            try {
+                mediaMsg = await msg.getQuotedMessage();
+                console.log('[STICKER] Using quoted message');
+            } catch (err) {
+                console.error('[STICKER] Error getting quoted:', err.message);
+            }
+        }
+        
+        if (!mediaMsg.hasMedia) {
+            return msg.reply('Kirim/Reply gambar atau GIF dengan caption !s');
+        }
 
-        if (msg.hasMedia) {
-            media = await msg.downloadMedia();
-        } else if (msg.hasQuotedMsg) {
-            const quoted = await msg.getQuotedMessage();
-            if (quoted.hasMedia) {
-                media = await quoted.downloadMedia();
+        console.log(`[STICKER] Media detected - Type: ${mediaMsg.type}, Mime: ${mediaMsg._data?.mimetype || 'unknown'}`);
+
+        let media = null;
+        
+        // ✅ RETRY MECHANISM dengan 5 percobaan + strategi eskalasi
+        for (let i = 0; i < 5; i++) {
+            try {
+                console.log(`[STICKER] Download attempt ${i + 1}/5...`);
+                
+                // Refresh message object dari history (untuk media yang belum fully loaded)
+                if (msg.hasQuotedMsg && i > 0) {
+                    console.log('[STICKER] Refreshing message from chat history...');
+                    const fetched = await chat.fetchMessages({ limit: 100 });
+                    const found = fetched.find(m => m.id._serialized === mediaMsg.id._serialized);
+                    if (found) {
+                        mediaMsg = found;
+                        console.log('[STICKER] Message refreshed from history');
+                    }
+                }
+
+                // Strategi 1: React dengan ⏳ (percobaan ke-2)
+                if (i === 1) {
+                    try {
+                        await mediaMsg.react('⏳');
+                        console.log('[STICKER] Added reaction to trigger media load');
+                    } catch (e) {
+                        console.log('[STICKER] React failed:', e.message);
+                    }
+                }
+
+                // Strategi 2: Forward-Download (percobaan ke-3) - JURUS AMPUH!
+                if (i === 2 && !media) {
+                    console.log('[STICKER] Trying Forward-Download strategy...');
+                    try {
+                        const forwardedMsgs = await mediaMsg.forward(chat.id);
+                        const forwardedMsg = Array.isArray(forwardedMsgs) ? forwardedMsgs[0] : forwardedMsgs;
+                        
+                        if (forwardedMsg) {
+                            await new Promise(resolve => setTimeout(resolve, 1500));
+                            media = await forwardedMsg.downloadMedia();
+                            
+                            // Hapus pesan forward
+                            try {
+                                await forwardedMsg.delete(true);
+                                console.log('[STICKER] Forward message deleted');
+                            } catch (e) {}
+                            
+                            if (media) {
+                                console.log('[STICKER] Forward-Download SUCCESS!');
+                                break;
+                            }
+                        }
+                    } catch (err) {
+                        console.error('[STICKER] Forward strategy failed:', err.message);
+                    }
+                }
+
+                // Download normal
+                media = await mediaMsg.downloadMedia();
+                
+                if (media) {
+                    console.log('[STICKER] Download successful!');
+                    break;
+                }
+                
+            } catch (e) {
+                console.log(`[STICKER] Attempt ${i + 1} failed: ${e.message}`);
+                if (i < 4) { // Jangan sleep di attempt terakhir
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
             }
         }
 
-        if (!media) return msg.reply('Kirim/Reply gambar atau GIF dengan caption !s');
+        // Hapus reaction
+        try { 
+            await mediaMsg.react(''); 
+        } catch (e) {}
+
+        if (!media) {
+            console.error('[STICKER] All download attempts failed');
+            return msg.reply('❌ Gagal download media setelah 5 percobaan.\n\n**Solusi:**\n1. Kirim media BARU (jangan forward)');
+        }
+
+        console.log('[STICKER] Media downloaded:', media.mimetype);
+        console.log('[STICKER] Data size:', media.data?.length || 0);
 
         try {
-            if (media.mimetype.includes('gif') || media.mimetype.includes('video')) {
+            // Deteksi apakah animated (video/gif)
+            const isAnimated = media.mimetype.includes('video') || 
+                              media.mimetype.includes('gif') ||
+                              mediaMsg.type === 'video';
+
+            const rawText = args.filter(arg => arg !== '!s').join(' ');
+            console.log('[STICKER] Text overlay:', rawText || 'none');
+            console.log('[STICKER] Is animated:', isAnimated);
+
+            // Jika animated atau tanpa text, kirim langsung
+            if (isAnimated || !rawText) {
+                console.log('[STICKER] Sending as plain sticker...');
                 await chat.sendMessage(media, {
                     sendMediaAsSticker: true,
                     stickerMetadata: {
                         author: 'AsakaAi',
-                        pack: 'Animated Pack',
-                        keepScale: true 
-                    }
-                });
-                return; 
-            }
-
-            const rawText = args.join(' ');
-
-            if (!rawText) {
-                return chat.sendMessage(media, {
-                    sendMediaAsSticker: true,
-                    stickerMetadata: {
-                        author: 'AsakaAi',
-                        pack: 'Sticker Pack',
+                        pack: isAnimated ? 'Animated Pack' : 'Sticker Pack',
                         keepScale: true
                     }
                 });
+                console.log('[STICKER] Success!');
+                return;
             }
 
+            // ✅ STATIC STICKER DENGAN TEXT (CANVAS)
+            console.log('[STICKER] Creating text overlay with canvas...');
+            
             const canvas = createCanvas(512, 512);
             const ctx = canvas.getContext('2d');
 
@@ -91,13 +186,16 @@ module.exports = {
 
             const textY = 482;
 
+            // Text stroke (outline)
             ctx.strokeStyle = 'black';
             ctx.lineWidth = 7;
             ctx.strokeText(cleanText.toUpperCase(), 256, textY);
 
+            // Text fill
             ctx.fillStyle = 'white';
             ctx.fillText(cleanText.toUpperCase(), 256, textY);
 
+            // Add emoji jika ada
             if (emojis.length > 0 && cleanText.length > 0) {
                 const emojiSize = 56;
                 const metrics = ctx.measureText(cleanText.toUpperCase());
@@ -130,9 +228,12 @@ module.exports = {
                 }
             });
 
+            console.log('[STICKER] Text sticker created successfully!');
+
         } catch (err) {
-            console.error('[STICKER ERROR]', err);
-            msg.reply('Gagal membuat stiker. Pastikan format didukung.');
+            console.error('[STICKER ERROR]', err.message);
+            console.error('[STICKER STACK]', err.stack);
+            msg.reply('❌ Gagal membuat stiker: ' + err.message);
         }
     }
 };
