@@ -4,23 +4,21 @@ const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const path = require('path');
 
-const isLinux = process.platform === 'linux';
-
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
-        headless: false, // Paksa FALSE (Muncul Window) di Windows agar download media lancar
+        headless: true,
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
             '--no-first-run',
             '--no-zygote',
-            '--disable-web-security', // Izinkan download konten cross-origin
-            '--disable-features=IsolateOrigins,site-per-process', // Fix masalah iframe/media
+            '--disable-web-security', 
+            '--disable-features=IsolateOrigins,site-per-process',
             '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         ],
-        executablePath: isLinux ? '/usr/bin/chromium-browser' : undefined 
+        executablePath: process.env.CHROME_BIN || undefined
     }
 });
 

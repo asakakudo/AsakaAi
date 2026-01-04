@@ -39,11 +39,10 @@ module.exports = {
     async execute(msg, chat, args) {
         console.log('[STICKER] Execute function called!');
         
-        await chat.sendSeen(); // ✅ Paksa status 'read' agar WA prioritaskan download
+        await chat.sendSeen(); 
         
         let mediaMsg = msg;
         
-        // Cek apakah ada quoted message
         if (msg.hasQuotedMsg) {
             try {
                 mediaMsg = await msg.getQuotedMessage();
@@ -60,13 +59,11 @@ module.exports = {
         console.log(`[STICKER] Media detected - Type: ${mediaMsg.type}, Mime: ${mediaMsg._data?.mimetype || 'unknown'}`);
 
         let media = null;
-        
-        // ✅ RETRY MECHANISM dengan 5 percobaan + strategi eskalasi
+      
         for (let i = 0; i < 5; i++) {
             try {
                 console.log(`[STICKER] Download attempt ${i + 1}/5...`);
                 
-                // Refresh message object dari history (untuk media yang belum fully loaded)
                 if (msg.hasQuotedMsg && i > 0) {
                     console.log('[STICKER] Refreshing message from chat history...');
                     const fetched = await chat.fetchMessages({ limit: 100 });
@@ -77,7 +74,6 @@ module.exports = {
                     }
                 }
 
-                // Strategi 1: React dengan ⏳ (percobaan ke-2)
                 if (i === 1) {
                     try {
                         await mediaMsg.react('⏳');
@@ -87,7 +83,6 @@ module.exports = {
                     }
                 }
 
-                // Strategi 2: Forward-Download (percobaan ke-3) - JURUS AMPUH!
                 if (i === 2 && !media) {
                     console.log('[STICKER] Trying Forward-Download strategy...');
                     try {
@@ -98,7 +93,6 @@ module.exports = {
                             await new Promise(resolve => setTimeout(resolve, 1500));
                             media = await forwardedMsg.downloadMedia();
                             
-                            // Hapus pesan forward
                             try {
                                 await forwardedMsg.delete(true);
                                 console.log('[STICKER] Forward message deleted');
@@ -114,7 +108,6 @@ module.exports = {
                     }
                 }
 
-                // Download normal
                 media = await mediaMsg.downloadMedia();
                 
                 if (media) {
@@ -124,13 +117,12 @@ module.exports = {
                 
             } catch (e) {
                 console.log(`[STICKER] Attempt ${i + 1} failed: ${e.message}`);
-                if (i < 4) { // Jangan sleep di attempt terakhir
+                if (i < 4) { 
                     await new Promise(resolve => setTimeout(resolve, 2000));
                 }
             }
         }
 
-        // Hapus reaction
         try { 
             await mediaMsg.react(''); 
         } catch (e) {}
@@ -144,7 +136,6 @@ module.exports = {
         console.log('[STICKER] Data size:', media.data?.length || 0);
 
         try {
-            // Deteksi apakah animated (video/gif)
             const isAnimated = media.mimetype.includes('video') || 
                               media.mimetype.includes('gif') ||
                               mediaMsg.type === 'video';
@@ -153,7 +144,6 @@ module.exports = {
             console.log('[STICKER] Text overlay:', rawText || 'none');
             console.log('[STICKER] Is animated:', isAnimated);
 
-            // Jika animated atau tanpa text, kirim langsung
             if (isAnimated || !rawText) {
                 console.log('[STICKER] Sending as plain sticker...');
                 await chat.sendMessage(media, {
@@ -168,7 +158,6 @@ module.exports = {
                 return;
             }
 
-            // ✅ STATIC STICKER DENGAN TEXT (CANVAS)
             console.log('[STICKER] Creating text overlay with canvas...');
             
             const canvas = createCanvas(512, 512);
@@ -186,16 +175,13 @@ module.exports = {
 
             const textY = 482;
 
-            // Text stroke (outline)
             ctx.strokeStyle = 'black';
             ctx.lineWidth = 7;
             ctx.strokeText(cleanText.toUpperCase(), 256, textY);
 
-            // Text fill
             ctx.fillStyle = 'white';
             ctx.fillText(cleanText.toUpperCase(), 256, textY);
 
-            // Add emoji jika ada
             if (emojis.length > 0 && cleanText.length > 0) {
                 const emojiSize = 56;
                 const metrics = ctx.measureText(cleanText.toUpperCase());
